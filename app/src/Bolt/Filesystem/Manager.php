@@ -21,7 +21,7 @@ class Manager extends MountManager
         $this->mount('files', $app['resources']->getPath('files'));
         $this->mount('config', $app['resources']->getPath('config'));
         $this->mount('theme', $app['resources']->getPath('themebase'));
-        $this->mount('extensions', $app['resources']->getPath('extensionspath').'/vendor');
+        $this->mount('extensions', $app['resources']->getPath('extensionspath') . '/vendor');
         $this->initManagers();
     }
 
@@ -54,8 +54,8 @@ class Manager extends MountManager
         $this->mountFilesystem($namespace, $manager);
         $this->initManager($namespace, $manager);
     }
-    
-    
+
+
     /**
      * Mainly passes through to parent class, but before it does this method
      * checks that the passed in directory exists.
@@ -65,7 +65,7 @@ class Manager extends MountManager
     public function mount($prefix, $location)
     {
         if (is_dir($location)) {
-           return parent::mountFilesystem($prefix, new Filesystem(new FilesystemAdapter($location))); 
+            return parent::mountFilesystem($prefix, new Filesystem(new FilesystemAdapter($location)));
         }
     }
 

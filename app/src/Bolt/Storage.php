@@ -968,7 +968,7 @@ class Storage
         // Build actual where
         $where = array();
         $where[] = sprintf("%s.status = 'published'", $table);
-        $where[] = '(( ' . implode(' OR ', $fields_where) . ' ) '.$tags_query. ' )';
+        $where[] = '(( ' . implode(' OR ', $fields_where) . ' ) ' . $tags_query . ' )';
         $where = array_merge($where, $filter_where);
 
         // Build SQL query
@@ -1290,7 +1290,7 @@ class Storage
         // Set up the $pager array with relevant values..
         $rowcount = $this->app['db']->executeQuery($pagerquery)->fetch();
         $pager = array(
-            'for' => $taxonomytype['slug'] . "." . $slug,
+            'for' => $taxonomytype['slug'] . "_" . $slug,
             'count' => $rowcount['count'],
             'totalpages' => ceil($rowcount['count'] / $limit),
             'current' => $page,
@@ -1298,7 +1298,7 @@ class Storage
             'showing_to' => ($page - 1) * $limit + count($taxorows)
         );
 
-        $this->app['storage']->setPager($taxonomytype['slug'] . "." . $slug, $pager);
+        $this->app['storage']->setPager($taxonomytype['slug'] . "_" . $slug, $pager);
 
         return $content;
     }
@@ -1573,7 +1573,7 @@ class Storage
             $decoded['self_paginated'] = false;
         }
 
-        if ($decoded['order_callback'] !== false) {
+        if (($decoded['order_callback'] !== false) || ($decoded['return_single'] == true)) {
             // Callback sorting disables pagination
             $decoded['self_paginated'] = false;
         }
@@ -1660,7 +1660,7 @@ class Storage
 
         // $decoded['contettypes'] gotten here
         // get page nr. from url if has
-        $meta_parameters['page'] = $this->decodePageParameter($decoded['contenttypes'][0], $this->app['request']);
+        $meta_parameters['page'] = $this->decodePageParameter($decoded['contenttypes'][0]);
 
         $this->prepareDecodedQueryForUse($decoded, $meta_parameters, $ctype_parameters);
 
@@ -1813,7 +1813,9 @@ class Storage
     protected function decodePageParameter($context = '')
     {
         $param = Pager::makeParameterId($context);
-        $page = ($this->app['request']->query) ? $this->app['request']->query->get($param, 1) : 1;
+        /* @var $query \Symfony\Component\HttpFoundation\ParameterBag */
+        $query = $this->app['request']->query;
+        $page = ($query) ? $query->get($param, $query->get('page', 1)) : 1;
 
         return $page;
     }
@@ -2016,10 +2018,10 @@ class Storage
             }
         }
 
-        // Perform pagination if necessary
+        // Perform pagination if necessary, but never paginate when 'returnsingle' is used.
         $offset = 0;
         $limit = false;
-        if (($decoded['self_paginated'] == false) && (isset($decoded['parameters']['page']))) {
+        if (($decoded['self_paginated'] == false) && (isset($decoded['parameters']['page'])) && (!$decoded['return_single'])) {
             $offset = ($decoded['parameters']['page'] - 1) * $decoded['parameters']['limit'];
             $limit = $decoded['parameters']['limit'];
         }
@@ -2149,7 +2151,6 @@ class Storage
      */
     public function getSortOrder($name = '-datepublish')
     {
-
         // If we don't get a string, we can't determine a sortorder.
         if (!is_string($name)) {
             return false;
@@ -2650,7 +2651,7 @@ class Storage
 
                 // Make it look like 'desktop#10'
                 $valuewithorder = $slug . "#" . $currentsortorder;
-                $slugkey = '/'.$configTaxonomies[$taxonomytype]['slug'].'/'.$slug;
+                $slugkey = '/' . $configTaxonomies[$taxonomytype]['slug'] . '/' . $slug;
 
                 if (!in_array($slug, $newslugs) && !in_array($valuewithorder, $newslugs) && !array_key_exists($slugkey, $newslugs)) {
                     $this->app['db']->delete($tablename, array('id' => $id));

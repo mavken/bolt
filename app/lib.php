@@ -125,7 +125,7 @@ function formatFilesize($size)
     } elseif ($size > 1024) {
         return sprintf("%0.2f kb", ($size / 1024));
     } else {
-        return $size." b";
+        return $size . ' b';
     }
 }
 
@@ -522,7 +522,7 @@ function path($path, $param = array(), $add = '')
         $param = array();
     }
 
-    return $app['url_generator']->generate($path, $param). $add;
+    return $app['url_generator']->generate($path, $param) . $add;
 }
 
 /**
@@ -747,7 +747,7 @@ function saveSerialize($filename, &$data)
 {
     $filename = fixPath($filename);
 
-    $ser_string = "<?php /* bolt */ die(); ?".">json:" . json_encode($data);
+    $ser_string = '<?php /* bolt */ die(); ?>json:' . json_encode($data);
 
     // disallow user to interrupt
     ignore_user_abort(true);
@@ -852,7 +852,7 @@ function str_replace_first($search, $replace, $subject)
  * @author Gabriel Sobrinho <gabriel (dot) sobrinho (at) gmail (dot) com>
  * @author Bob for bolt-specific excludes
  */
-function array_merge_recursive_distinct (array &$array1, array &$array2)
+function array_merge_recursive_distinct(array &$array1, array &$array2)
 {
     $merged = $array1;
 
@@ -865,7 +865,7 @@ function array_merge_recursive_distinct (array &$array1, array &$array2)
         }
 
         if (is_array($value) && isset($merged[$key]) && is_array($merged[$key])) {
-            $merged[$key] = array_merge_recursive_distinct($merged [$key], $value);
+            $merged[$key] = array_merge_recursive_distinct($merged[$key], $value);
         } else {
             $merged[$key] = $value;
         }

@@ -72,16 +72,6 @@ jQuery(function($) {
         setTimeout( function(){ updateLatestActivity(); }, 20 * 1000);
     }
 
-    // Initialize "info" popovers, used in 'edit content'.
-    $('#navpage-secondary a.menu-pop').each(function(){
-        var $this = $(this);
-        $this.popover({
-            trigger: 'hover',
-            delay: { show: 500, hide: 300 },
-            container: $this
-        });
-    });
-
     /**
      * Smarter dropdowns/dropups based on viewport height.
      * Based on: https://github.com/twbs/bootstrap/issues/3637#issuecomment-9850709
@@ -97,6 +87,12 @@ jQuery(function($) {
             mouseEvt = event;
         }
         $(item).parent().on('show.bs.dropdown', function(e){
+            
+            //prevent breakage on old IE. 
+            if (typeof mouseEvt == "undefined" || mouseEvt == null) { 
+                return false;
+            }
+            
             var button = e.relatedTarget;
             var self = $(this).find('[data-toggle="dropdown"]');
             var menu = self.next('.dropdown-menu');
@@ -215,7 +211,8 @@ jQuery(function($) {
         if(aItems.length <1){
             bootbox.alert("Nothing chosen to delete");
         }else{
-            bootbox.confirm("Delete these "+(aItems.length===1? "Entry":"Entries")+"?", function(confirmed) {
+            var notice = "Are you sure you wish to <strong>delete "+(aItems.length===1? "this record":"these records")+"</strong>? There is no undo."
+            bootbox.confirm(notice, function(confirmed) {
                 $(".alert").alert();
                 if(confirmed===true){
                     $.each(aItems, function( index, id ) {
@@ -233,6 +230,7 @@ jQuery(function($) {
             });
         }
     });
+
 
     $('tbody.sortable').sortable({
         items: 'tr',
@@ -589,7 +587,12 @@ function makeUri(contenttypeslug, id, usesfields, slugfield, fulluri) {
         $('#'+this).on('propertychange.bolt input.bolt change.bolt', function() {
             var usesvalue = "";
             $(usesfields).each( function() {
-                usesvalue += $("#"+this).val() ? $("#"+this).val() : "";
+                if ($("#"+this).is("select") && $("#"+this).hasClass("slug-text")) {
+                    usesvalue += $("#"+this).val() ? $("#"+this).find("option[value=" + $("#"+this).val() + "]").text() : "";
+                }
+                else {
+                    usesvalue += $("#"+this).val() ? $("#"+this).val() : "";
+                }
                 usesvalue += " ";
             })
             clearTimeout(makeuritimeout);
@@ -686,7 +689,7 @@ function bindVideoEmbedAjax(key) {
             $('#video-'+key+'-width').val(data.width);
             $('#video-'+key+'-height').val(data.height);
             $('#video-'+key+'-ratio').val(data.width / data.height);
-            $('#video-'+key+'-text').html('"' + data.title + '" by ' + data.author_name);
+            $('#video-'+key+'-text').html('"<b>' + data.title + '</b>" by ' + data.author_name);
             $('#myModal').find('.modal-body').html(data.html);
             $('#video-'+key+'-author_name').val(data.author_name);
             $('#video-'+key+'-author_url').val(data.author_url);
@@ -793,16 +796,42 @@ var Sidebar = Backbone.Model.extend({
     initialize: function() {
         // Do this, only if the sidebar is visible. (not when in small-responsive view)
         if ($('#navpage-secondary').is(':visible')) {
-            // Initialize popovers, used in sidebar menu.
-            $('#navpage-secondary a.menu-pop').each(function(){
-                var $this = $(this);
-                $this.popover({
-                    trigger: 'hover',
-                    delay: 300,
-                    container: $this
-                });
+
+            // Note: It might seem easier to do this with a simple .popover, but we
+            // shouldn't. People using keyboard access will not appreciate the menu timing 
+            // out and disappearing after a split-second of losing focus. 
+            $('#navpage-secondary a.menu-pop').on('mouseover focus', function() {
+                $('#navpage-secondary a.menu-pop').not(this).popover('hide');
+                $(this).popover('show');
             });
 
+            // Likewise, we need to distinct events, to hide the sidebar's popovers:
+            // One for 'mouseleave' on the sidebar itself, and one for keyboard 'focus'
+            // on the items before and after. 
+            $('#navpage-secondary').on('mouseleave', function() {
+                window.setTimeout(function() {
+                    $('#navpage-secondary a.menu-pop').popover('hide');
+                }, 500);
+            });
+            $('.nav-secondary-collapse a, .nav-secondary-dashboard a').on('focus', function() {
+                $('#navpage-secondary a.menu-pop').popover('hide');
+            });
+
+        }
+
+        // set up 'fixlength'
+        window.setTimeout(function(){ sidebar.fixlength(); }, 500);
+
+    },
+
+    /*
+     * Make sure the sidebar is as long as the document height. Also: Typecasting! love it or hate it! 
+     */
+    fixlength: function() {
+        var documentheight = $('#navpage-content').height() + 22;
+        if (documentheight > $('#navpage-secondary').height()) {
+            $('#navpage-secondary').height( documentheight + "px");
+            window.setTimeout(function(){ sidebar.fixlength(); }, 500);
         }
     },
 

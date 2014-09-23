@@ -1,9 +1,9 @@
 <?php
-
 namespace Bolt;
 
 use Bolt\Extensions\BaseExtensionInterface;
 use Symfony\Component\Console\Command\Command;
+use Composer\Json\JsonFile;
 
 abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInterface
 {
@@ -34,7 +34,10 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
     }
 
     /**
-     * Set the 'basepath' and the 'namespace' for the extension, since we can't use __DIR__
+     * Set the 'basepath' and the 'namespace' for the extension. We can't use
+     * __DIR__, because that would give us the base path for BaseExtension.php
+     * (the file you're looking at), rather than the base path for the actual,
+     * derived, extension class.
      *
      * @see http://stackoverflow.com/questions/11117637/getting-current-working-directory-of-an-extended-class-in-php
      *
@@ -47,7 +50,9 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
     }
 
     /**
-     * Getter function to return an extension's base path
+     * Get the base path, that is, the directory where the (derived) extension
+     * class file is located. The base path is the "root directory" under which
+     * all files related to the extension can be found.
      *
      * @return string
      */
@@ -61,6 +66,25 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
         $relative = str_replace($this->app['resources']->getPath('extensions'), "", $this->basepath);
 
         return $this->app['resources']->getUrl('extensions') . ltrim($relative, "/") . "/";
+    }
+
+    public function getExtensionConfig()
+    {
+        $json = new JsonFile($this->getBasepath() . '/composer.json');
+
+        if ($json->exists()) {
+            $composerjson = $json->read();
+
+            return array(strtolower($composerjson['name']) => array(
+                'name' => $this->getName(),
+                'json' => $composerjson
+            ));
+        } else {
+            return array($this->getName() => array(
+                'name' => $this->getName(),
+                'json' => array()
+            ));
+        }
     }
 
     /**
@@ -90,13 +114,13 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
         $basefile = $this->app['resources']->getPath('extensionsconfig') . '/' . $this->getName();
 
         // Load main config
-        if ($this->isConfigValid($basefile.'.yml', true)) {
-            $this->loadConfigFile($basefile.'.yml');
+        if ($this->isConfigValid($basefile . '.yml', true)) {
+            $this->loadConfigFile($basefile . '.yml');
         }
 
         // Load local config
-        if ($this->isConfigValid($basefile.'_local.yml', false)) {
-            $this->loadConfigFile($basefile.'.yml');
+        if ($this->isConfigValid($basefile . '_local.yml', false)) {
+            $this->loadConfigFile($basefile . '.yml');
         }
 
         $this->configLoaded = true;
@@ -115,7 +139,6 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
      */
     private function isConfigValid($configfile, $create)
     {
-        //
         if (file_exists($configfile)) {
             if (is_readable($configfile)) {
                 return true;
@@ -130,16 +153,16 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
                 return false;
             }
         } elseif ($create) {
-            $configdistfile = $this->basepath. "/config.yml.dist";
-            
-            // There are cases where the config directory may not exist yet. Firstly we try to create it.
+            $configdistfile = $this->basepath . '/config.yml.dist';
+
+            // There are cases where the config directory may not exist yet.
+            // Firstly we try to create it.
             if (!is_dir(dirname($configfile))) {
-                @mkdir(dirname($configfile),0777, true);
+                @mkdir(dirname($configfile), 0777, true);
             }
-            
+
             // If config.yml.dist exists, attempt to copy it to config.yml.
             if (is_readable($configdistfile) && is_dir(dirname($configfile))) {
-
                 if (copy($configdistfile, $configfile)) {
                     // Success!
                     $this->app['log']->add(
@@ -188,6 +211,7 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
     }
 
     /**
+     * TODO: document this method.
      * Boilerplate for initialize()
      */
     public function initialize()
@@ -275,6 +299,16 @@ abstract class BaseExtension extends \Twig_Extension implements BaseExtensionInt
     public function disableJquery()
     {
         $this->app['extensions']->disableJquery();
+    }
+
+    /**
+     * Returns a list of all css and js assets that are added via extensions.
+     *
+     * @return array
+     */
+    public function getAssets()
+    {
+        return $this->app['extensions']->getAssets();
     }
 
     /**

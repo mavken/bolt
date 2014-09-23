@@ -6,7 +6,6 @@ use Bolt;
 use Bolt\Extensions\Snippets\Location as SnippetLocation;
 use Bolt\Extensions\BaseExtensionInterface;
 use Bolt\Configuration\LowlevelException;
-use Composer\Json\JsonFile;
 
 class Extensions
 {
@@ -84,7 +83,16 @@ class Extensions
      *
      * @var array
      */
-    public $composer;
+    public $composer = array();
+    /**
+     * Contains a list of all css and js assets added through addCss and
+     * addJavascript functions.
+     *
+     * @var array
+     */
+    private $assets;
+
+    private $isInitialized = false;
 
 
     public function __construct(Application $app)
@@ -98,6 +106,11 @@ class Extensions
         } else {
             $this->addjquery = false;
         }
+
+        $this->assets = array(
+            'css' => array(),
+            'js'  => array()
+        );
     }
 
     /**
@@ -124,7 +137,7 @@ class Extensions
             $loader->register();
         }
 
-        $filepath = $this->basefolder.'/vendor/composer/autoload_files.php';
+        $filepath = $this->basefolder . '/vendor/composer/autoload_files.php';
         if (is_readable($filepath)) {
             $files = include $filepath;
             foreach ($files as $file) {
@@ -139,8 +152,8 @@ class Extensions
         }
     }
 
-   public function errorCatcher($file)
-   {
+    public function errorCatcher($file)
+    {
         $current = str_replace($this->app['resources']->getPath('extensions'), '', $file);
 
         // Flush output buffer before starting a new buffer or $current will contain
@@ -149,21 +162,24 @@ class Extensions
         if (ob_get_length()) {
             ob_end_flush();
         }
-        ob_start(function ($buffer) use ($current) {
-            $error = error_get_last();
-            if ($error['type'] == E_ERROR || $error['type']== E_PARSE) {
-                $html = LowlevelException::$html;
-                $message = "<code>".$error['message']."<br>File ".$error['file']."<br>Line: ".$error['line']."</code><br><br>";
-                $message .= $this->app['translator']->trans("There is a fatal error in one of the extensions loaded on your Bolt Installation.");
-                if ($current) {
-                    $message .= $this->app['translator']->trans(" You will only be able to continue by manually deleting the extension that was initialized at: extensions".$current);
+        ob_start(
+            function ($buffer) use ($current) {
+                $error = error_get_last();
+                $isExtensionError = strpos($error['file'], $this->app['resources']->getPath('extensions'));
+                if (($error['type'] == E_ERROR || $error['type'] == E_PARSE) && false !== $isExtensionError) {
+                    $html = LowlevelException::$html;
+                    $message = '<code>' . $error['message'] . '<br>File ' . $error['file'] . '<br>Line: ' . $error['line'] . '</code><br><br>';
+                    $message .= $this->app['translator']->trans('There is a fatal error in one of the extensions loaded on your Bolt Installation.');
+                    if ($current) {
+                        $message .= $this->app['translator']->trans(' You will only be able to continue by manually deleting the extension that was initialized at: extensions' . $current);
+                    }
+
+                    return str_replace('%error%', $message, $html);
                 }
 
-                return str_replace('%error%', $message, $html);
+                return $buffer;
             }
-
-            return $buffer;
-        });
+        );
     }
 
     /**
@@ -175,29 +191,16 @@ class Extensions
     public function register(BaseExtensionInterface $extension)
     {
         $name = $extension->getName();
-        $this->app['extensions.'.$name] = $extension;
-        $this->enabled[$name] = $this->app['extensions.'.$name];
+        $this->app['extensions.' . $name] = $extension;
+        $this->enabled[$name] = $this->app['extensions.' . $name];
 
         // Store the composer part of the extensions config
-        $this->registerComposerJson($extension);
+        array_push($this->composer, $extension->getExtensionConfig());
+        if ($this->isInitialized) {
+            $this->initializeExtension($extension);
+        }
     }
 
-    /**
-     * Register the extensions Composer JSON and a matching Bolt name.
-     * This allows reverse lookup of Bolt name to Composer name
-     *
-     * @param BaseExtensionInterface $extension
-     */
-    private function registerComposerJson(BaseExtensionInterface $extension)
-    {
-        $json = new JsonFile($extension->getBasepath() . '/composer.json');
-        $composerjson = $json->read();
-
-        $this->app['extensions']->composer[ strtolower($composerjson['name']) ] = array(
-            'name' => $extension->getName(),
-            'json' => $composerjson
-        );
-    }
 
     /**
      * Check if an extension is enabled, case sensitive.
@@ -217,25 +220,31 @@ class Extensions
     public function initialize()
     {
         $this->autoload($this->app);
-        foreach ($this->enabled as $name => $extension) {
+        $this->isInitialized = true;
+        foreach ($this->enabled as $extension) {
+            $this->initializeExtension($extension);
+        }
+    }
 
-            try {
-                $extension->getConfig();
-                $extension->initialize();
-                $this->initialized[$name] = $extension;
-            } catch (\Exception $e) {
-            }
-
-            // Check if (instead, or on top of) initialize, the extension has a 'getSnippets' method
+    protected function initializeExtension(BaseExtensionInterface $extension)
+    {
+        $name = $extension->getName();
+        try {
+            $extension->getConfig();
+            $extension->initialize();
+            $this->initialized[$name] = $extension;
             $this->getSnippets($name);
-
             if ($extension instanceof \Twig_Extension) {
                 $this->app['twig']->addExtension($extension);
                 if (!empty($info['allow_in_user_content'])) {
                     $this->app['safe_twig']->addExtension($extension);
                 }
             }
+        } catch (\Exception $e) {
+
         }
+
+
     }
 
     /**
@@ -255,6 +264,16 @@ class Extensions
     }
 
     /**
+     * Returns a list of all css and js assets that are added via extensions.
+     *
+     * @return array
+     */
+    public function getAssets()
+    {
+        return $this->assets;
+    }
+
+    /**
      * Add a particular CSS file to the output. This will be inserted before the
      * other css files.
      *
@@ -264,6 +283,7 @@ class Extensions
     public function addCss($filename, $late = false)
     {
         $html = sprintf('<link rel="stylesheet" href="%s" media="screen">', $filename);
+        $this->assets['css'][] = $filename;
 
         if ($late) {
             $this->insertSnippet(SnippetLocation::END_OF_BODY, $html);
@@ -281,6 +301,7 @@ class Extensions
     public function addJavascript($filename, $late = false)
     {
         $html = sprintf('<script src="%s"></script>', $filename);
+        $this->assets['js'][] = $filename;
 
         if ($late) {
             $this->insertSnippet(SnippetLocation::END_OF_BODY, $html);

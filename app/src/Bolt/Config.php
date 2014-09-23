@@ -477,7 +477,7 @@ class Config
                 }
 
                 // Make sure the 'type' is in the list of allowed types
-                if (!isset($field['type']) || !$this->fields->has($field['type']) ) {
+                if (!isset($field['type']) || !$this->fields->has($field['type'])) {
                     $error = __(
                         "In the contenttype for '%contenttype%', the field '%field%' has 'type: %type%', which is not a proper fieldtype. Please edit contenttypes.yml, and correct this.",
                         array('%contenttype%' => $key, '%field%' => $fieldname, '%type%' =>
@@ -675,7 +675,7 @@ class Config
         $this->set('general/wysiwyg/filebrowser/browseUrl', $this->app['resources']->getUrl('async') . 'filebrowser/');
         $this->set(
             'general/wysiwyg/filebrowser/imageBrowseUrl',
-            $this->app['resources']->getUrl('bolt')  . 'files' . '/files/'
+            $this->app['resources']->getUrl('bolt') . 'files/files/'
         );
     }
 
@@ -757,13 +757,13 @@ class Config
             if (isset($configdb["path"])) {
                 $configpaths = $this->app['resources']->getPaths();
                 if (substr($configdb['path'], 0, 1) !== "/") {
-                    $configdb["path"] = $configpaths["rootpath"]."/".$configdb["path"];
+                    $configdb['path'] = $configpaths["rootpath"] . '/' . $configdb['path'];
                 }
             }
 
             $dboptions = array(
                 'driver' => 'pdo_sqlite',
-                'path' => isset($configdb['path']) ? realpath($configdb["path"])."/".$basename : $this->app['resources']->getPath('database') ."/". $basename,
+                'path' => isset($configdb['path']) ? realpath($configdb['path']) . '/' . $basename : $this->app['resources']->getPath('database') . '/' . $basename,
                 'randomfunction' => 'RANDOM()',
                 'memory' => isset($configdb['memory']) ? true : false
             );

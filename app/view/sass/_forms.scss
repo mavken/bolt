@@ -21,15 +21,22 @@ label.permalink {
 
 .form-horizontal .control-label {
     text-align: left;
-    font-size: $font-size-base + 2px;
+    font-size: $font-size-base + 1px;
+    font-weight: normal;
     margin-bottom: 5px;
+    @include old-ie() {
+        @include in-large-mode() {
+            text-align:left;
+            margin-bottom: 5px;
+        }
+    }
 }
 
 .form-horizontal .control-label-inline {
     font-size: $font-size-base;
     font-weight: bold;
     margin-bottom: 5px;
-    padding-top: 7px;
+    padding-top: 4px;
 }
 
 .form-group {
@@ -83,9 +90,6 @@ fieldset.checkbox div {
     font-size: $font-size-base + 1px;
 }
 
-#editcontent > .form-group {
-    margin-bottom:40px;
-}
 
 
 #editcontent input.large {
@@ -93,7 +97,7 @@ fieldset.checkbox div {
 }
 
 #editcontent .narrow {
-    width: 30%;
+    width: 45%;
     min-width: 200px;
 }
 
@@ -262,7 +266,7 @@ fieldset.checkbox div {
 
 #editcontent fieldset.slug {
     // pull the slug closer to the field previous, usually the title
-    margin-top:-30px;
+    margin-top:-10px;
 }
 
 #editcontent input.editslug {
@@ -408,7 +412,7 @@ fieldset.checkbox div {
     }
     a:hover {
         color: #555;
-        background-color:#efefef;
+        background-color: #F8F8F8 !important;
         border-botom:0;
     }
     li {
@@ -416,7 +420,7 @@ fieldset.checkbox div {
         &.active {
             margin-top:-5px;
             a {
-                background-color:#efefef;
+                background-color: #F8F8F8;
                 color: #333;
                 padding:7px 10px 8px 10px;
             }

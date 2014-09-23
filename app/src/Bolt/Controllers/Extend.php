@@ -15,18 +15,25 @@ use Bolt\Composer\CommandRunner;
 
 class Extend implements ControllerProviderInterface, ServiceProviderInterface
 {
+    public $readWriteMode;
 
     public function register(Silex\Application $app)
     {
-        $app['extend.site'] = 'http://beta.extensions.bolt.cm/';
-        $app['extend.repo'] = 'http://beta.extensions.bolt.cm/list.json';
+        $app['extend.site'] = 'http://extensions.bolt.cm/';
+        $app['extend.repo'] = 'http://extensions.bolt.cm/list.json';
+        $app['extend'] = $this;
+        $extensionsPath = $app['resources']->getPath('extensions');
+        $this->readWriteMode = is_dir("$extensionsPath/") && is_writable("$extensionsPath/");
 
         // This exposes the main upload object as a service
+        $me = $this;
         $app['extend.runner'] = $app->share(
-            function ($app) {
-                $runner = new CommandRunner($app, $app['extend.repo']);
-
-                return $runner;
+            function ($app) use ($me) {
+                if ($me->readWriteMode) {
+                    return new CommandRunner($app, $app['extend.repo']);
+                } else {
+                    return null;
+                }
             }
         );
     }
@@ -84,14 +91,23 @@ class Extend implements ControllerProviderInterface, ServiceProviderInterface
         return $ctr;
     }
 
+    private function getRenderContext(Silex\Application $app)
+    {
+        $extensionsPath = $app['resources']->getPath('extensions');
+
+        return array(
+                'messages' => $app['extend.runner']->messages,
+                'enabled' => $this->readWriteMode,
+                'extensionsPath' => $extensionsPath,
+                'site' => $app['extend.site']
+            );
+    }
+
     public function overview(Silex\Application $app, Request $request)
     {
         return $app['render']->render(
             'extend/extend.twig',
-            array(
-                'messages' => $app['extend.runner']->messages,
-                'site' => $app['extend.site']
-            )
+            $this->getRenderContext($app)
         );
     }
 
@@ -99,29 +115,25 @@ class Extend implements ControllerProviderInterface, ServiceProviderInterface
     {
         return $app['render']->render(
             'extend/install-package.twig',
-            array(
-                'messages' => $app['extend.runner']->messages,
-                'site' => $app['extend.site']
-            )
+            $this->getRenderContext($app)
         );
     }
 
     public function installInfo(Silex\Application $app, Request $request)
     {
         $package = $request->get('package');
-        $versions = array('dev'=>array(),'stable'=>array());
+        $versions = array('dev' => array(), 'stable' => array());
         try {
-            $url = $app['extend.site']."info.json?package=".$package."&bolt=".$app['bolt_version'];
+            $url = $app['extend.site'] . 'info.json?package=' . $package . '&bolt=' . $app['bolt_version'];
             $info = json_decode(file_get_contents($url));
             foreach ($info->version as $version) {
-                $versions[$version->stability][]=$version;
+                $versions[$version->stability][] = $version;
             }
         } catch (\Exception $e) {
-
+            error_log($e); // least we can do
         }
 
         return new JsonResponse($versions);
-
     }
 
     public function packageInfo(Silex\Application $app, Request $request)
@@ -184,8 +196,8 @@ class Extend implements ControllerProviderInterface, ServiceProviderInterface
             $newName = basename($theme);
         }
 
-        $source = $app['resources']->getPath('extensions').'/vendor/'.$theme;
-        $destination = $app['resources']->getPath('themebase').'/'.$newName;
+        $source = $app['resources']->getPath('extensions') . '/vendor/' . $theme;
+        $destination = $app['resources']->getPath('themebase') . '/' . $newName;
         if (is_dir($source)) {
             try {
                 $filesystem = new Filesystem();
@@ -194,7 +206,7 @@ class Extend implements ControllerProviderInterface, ServiceProviderInterface
 
                 return new Response($app['translator']->trans('Theme successfully generated. You can now edit it directly from your theme folder.'));
             } catch (\Exception $e) {
-               return new Response($app['translator']->trans('We were unable to generate the theme. It is likely that your theme directory is not writable by Bolt. Check the permissions and try reinstalling.'));
+                return new Response($app['translator']->trans('We were unable to generate the theme. It is likely that your theme directory is not writable by Bolt. Check the permissions and try reinstalling.'));
             }
         }
     }

@@ -19,9 +19,9 @@ class CommandRunner
 
         $this->basedir = $app['resources']->getPath('extensions');
         $this->packageRepo = $packageRepo;
-        $this->packageFile = $app['resources']->getPath('root').'/extensions/composer.json';
+        $this->packageFile = $app['resources']->getPath('root') . '/extensions/composer.json';
         umask(0000);
-        putenv("COMPOSER_HOME=".$app['resources']->getPath('cache').'/composer');
+        putenv('COMPOSER_HOME=' . $app['resources']->getPath('cache') . '/composer');
 
         $this->wrapper = \evidev\composer\Wrapper::create();
 
@@ -35,12 +35,23 @@ class CommandRunner
             );
         }
 
-        $this->execute('config repositories.bolt composer '.$app['extend.site'].'satis/');
+        $this->execute('config repositories.bolt composer '. $app['extend.site'] . 'satis/');
         $json = json_decode(file_get_contents($this->packageFile));
         $json->repositories->packagist = false;
+        $json->{'minimum-stability'} = "dev";
+        $json->{'prefer-stable'} = true;
         $basePackage = "bolt/bolt";
         $json->provide = new \stdClass();
         $json->provide->$basePackage = $app['bolt_version'];
+        // $json->scripts = array(
+        //     'post-package-install' => "Bolt\\Composer\\ScriptHandler::extensions",
+        //     'post-package-update' => "Bolt\\Composer\\ScriptHandler::extensions"
+        // );
+        // $json->autoload = array(
+        //     "files"=> array($app['resources']->getPath('root')."/vendor/autoload.php")
+        // );
+        $pathToWeb = $app['resources']->findRelativePath($this->app['resources']->getPath('extensions'), $this->app['resources']->getPath('web'));
+        $json->extra = array('bolt-web-path' => $pathToWeb);
         file_put_contents($this->packageFile, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
         try {
@@ -62,7 +73,7 @@ class CommandRunner
         $packages = $json->require;
         $installed = array();
         foreach ($packages as $package => $version) {
-            $installed[$package] = $this->execute("show -N -i $package $version");
+            $installed[$package] = $this->execute("show -N -i %s %s", $package, $version);
         }
 
         $updates = array();
@@ -70,7 +81,7 @@ class CommandRunner
         foreach ($installed as $package => $packageInfo) {
 
             if (is_array($packageInfo)) {
-                $response = $this->execute('update --dry-run '.$package);
+                $response = $this->execute('update --dry-run %s', $package);
                 if (!$response) {
                     continue;
                 }
@@ -89,14 +100,14 @@ class CommandRunner
 
     public function info($package, $version)
     {
-        $check = $this->execute("show -N -i $package $version");
+        $check = $this->execute("show -N -i %s %s", $package, $version);
 
-        return $this->showCleanup( (array) $check, $package, $version);
+        return $this->showCleanup((array) $check, $package, $version);
     }
 
     public function update($package)
     {
-        $response = $this->execute("update $package");
+        $response = $this->execute("update %s", $package);
 
         if (false !== $response) {
             return implode($response, '<br>');
@@ -109,12 +120,12 @@ class CommandRunner
 
     public function install($package, $version)
     {
-        $response = $this->execute("require $package $version");
+        $response = $this->execute("require %s %s", $package, $version);
         if (false !== $response) {
             return implode('<br>', $response);
         } else {
-            $message = 'The requested extension version could not be installed. The most likely reason is that the version'."\n".
-                'requested is not compatible with this version of Bolt.'."\n\n".
+            $message = 'The requested extension version could not be installed. The most likely reason is that the version' . "\n" .
+                'requested is not compatible with this version of Bolt.' . "\n\n" .
                 'Check on the extensions site for more information.';
 
             return $message;
@@ -141,9 +152,9 @@ class CommandRunner
         file_put_contents($this->packageFile, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         $response = $this->execute('update --prefer-dist');
         if ($response) {
-            return $package.' successfully removed';
+            return $package . ' successfully removed';
         } else {
-            return $package.' could not be uninstalled. Try checking that your composer.json file is writable.';
+            return $package . ' could not be uninstalled. Try checking that your composer.json file is writable.';
         }
     }
 
@@ -155,7 +166,7 @@ class CommandRunner
         $packages = $json->require;
 
         foreach ($packages as $package => $version) {
-            $check = $this->execute("show -N -i $package $version");
+            $check = $this->execute("show -N -i %s %s", $package, $version);
             $installed[] = $this->showCleanup((array) $check, $package, $version);
         }
 
@@ -166,8 +177,27 @@ class CommandRunner
         }
     }
 
-    protected function execute($command)
+    /**
+     * @param string $format sprintf-style format string.
+     * @param string, ... $params one or more parameters to interpolate into the format
+     */
+    protected function execute()
     {
+        $args = func_get_args();
+        $format = array_shift($args);
+        $sanitize = function ($arg) {
+            if (preg_match('/^-/', $arg)) {
+                return ''; // starts with a dash: skip
+            }
+            if (preg_match('#[^a-zA-Z0-9\\-_:/~^\\\\.*]#', $arg)) {
+                return ''; // contains invalid characters: skip
+            }
+
+            return escapeshellarg($arg);
+        };
+        $params = array_map($sanitize, $args);
+        $command = vsprintf($format, $params);
+
         // Try to prevent time-outs.
         set_time_limit(0);
 
@@ -177,7 +207,7 @@ class CommandRunner
         // @see https://github.com/composer/composer/issues/2146#issuecomment-35478940
         putenv("DYLD_LIBRARY_PATH=''");
 
-        $command .= ' -d '.$this->basedir.' --no-ansi';
+        $command .= ' -d ' . $this->basedir . ' -n --no-ansi';
         $output = new \Symfony\Component\Console\Output\BufferedOutput();
         $responseCode = $this->wrapper->run($command, $output);
         $this->app['log']->add($command, 2, '', 'composer');
@@ -241,18 +271,24 @@ class CommandRunner
         // Note we only do this for successfully loaded extensions.
         if (isset($this->app['extensions']->composer[$name])) {
             $paths = $this->app['resources']->getPaths();
-            if (is_readable($paths['extensionspath'] . '/vendor/' . $pack['name'] . '/README.md' )) {
-                $pack['readme'] = $pack['names'] . '/README.md';
-            } elseif (is_readable($paths['extensionspath'] . '/vendor/' . $pack['name'] . '/readme.md' )) {
-                $pack['readme'] = $pack['names'] . '/readme.md';
+            if (is_readable($paths['extensionspath'] . '/vendor/' . $pack['name'] . '/README.md')) {
+                $pack['readme'] = $pack['name'] . '/README.md';
+            } elseif (is_readable($paths['extensionspath'] . '/vendor/' . $pack['name'] . '/readme.md')) {
+                $pack['readme'] = $pack['name'] . '/readme.md';
             }
+
+            if (!empty($pack['readme'])) {
+                $pack['readmelink'] = $paths['async'] . 'readme/' . $pack['readme'];
+            }
+
         }
 
         // Check if we hve a config file, and if it's readable. (yet)
         if (isset($this->app['extensions']->composer[$name]['name'])) {
-            $configfile = $paths['extensionsconfig'] . '/' . $this->app['extensions']->composer[$name]['name'] . '.yml';
-            if (is_readable($configfile)) {
-                $pack['config'] = $configfile;
+            $configfilepath = $paths['extensionsconfig'] . '/' . $this->app['extensions']->composer[$name]['name'] . '.yml';
+            if (is_readable($configfilepath)) {
+                $configfilename = 'extensions/' . $this->app['extensions']->composer[$name]['name'] . '.yml';
+                $pack['config'] = path('fileedit', array('namespace' => 'config', 'file' => $configfilename));
             }
         }
 

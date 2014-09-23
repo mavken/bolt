@@ -49,12 +49,12 @@
         <div class="list"></div>
 
         <div class="button-wrap">
-                <span class="btn btn-info fileinput-button">
+                <span class="btn btn-secondary fileinput-button">
                     <i class="fa fa-upload"></i> <span>{{ __('Upload image') }}</span>
                     <input{{ macro.attr(attr_fileupload) }}>
                 </span>
 
-                <a data-target="#selectModal-{{ key }}" href="{{ paths.async }}browse/files?key={{ key }}" class="btn btn-tertiary fileinput-select" data-toggle="modal">
+                <a data-target="#selectModal-{{ key }}" href="{{ paths.async }}browse/files/{{context.contenttype.upload|default('')}}?key={{ key }}" class="btn btn-tertiary fileinput-select" data-toggle="modal">
                     <i class="fa fa-download"></i> {{ __('Select from server') }}
                 </a>
 

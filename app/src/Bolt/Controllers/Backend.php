@@ -767,7 +767,7 @@ class Backend implements ControllerProviderInterface
                  */
                 if ($app['request']->get('returnto')) {
                     if ($app['request']->get('returnto') == "new") {
-                        return redirect('editcontent', array('contenttypeslug' => $contenttype['slug'], 'id' => $id), "#".$app['request']->get('returnto'));
+                        return redirect('editcontent', array('contenttypeslug' => $contenttype['slug'], 'id' => $id), '#' . $app['request']->get('returnto'));
                     } elseif ($app['request']->get('returnto') == "ajax") {
                         /*
                          * Flush any buffers from saveConent() dispatcher hooks
@@ -784,7 +784,21 @@ class Backend implements ControllerProviderInterface
 
                         // Get our record after POST_SAVE hooks are dealt with and return the JSON
                         $content = $app['storage']->getContent($contenttype['slug'], array('id' => $id, 'returnsingle' => true));
-                        return new JsonResponse($content->values);
+
+                        foreach ($content->values as $key => $value) {
+                            // Some values are returned as \Twig_Markup and JSON can't deal with that
+                            if (is_array($value)) {
+                                foreach ($value as $subkey => $subvalue) {
+                                    if (gettype($subvalue) == 'object' && get_class($subvalue) == 'Twig_Markup') {
+                                        $val[$key][$subkey] = $subvalue->__toString();
+                                    }
+                                }
+                            } else {
+                                $val[$key] = $value;
+                            }
+                        }
+
+                        return new JsonResponse($val);
                     }
                 }
 
@@ -1001,7 +1015,7 @@ class Backend implements ControllerProviderInterface
             if ($dbdriver == 'sqlite' || $dbdriver == 'pdo_sqlite') {
                 $note = __(
                     'You are currently using SQLite to set up the first user. If you wish to use MySQL or PostgreSQL ' .
-                    'instead, edit the configuration file at <tt>\'app/config/config.yml\'</tt> and Bolt will set '.
+                    'instead, edit the configuration file at <tt>\'app/config/config.yml\'</tt> and Bolt will set ' .
                     'up the database tables for you. Be sure to reload this page before continuing.'
                 );
             }
@@ -1389,7 +1403,7 @@ class Backend implements ControllerProviderInterface
                         if ($app['filepermissions']->allowedUpload($filename)) {
 
                             $handler = $app['upload'];
-                            $handler->setPrefix($path."/");
+                            $handler->setPrefix($path . '/');
                             $result = $app['upload']->process($fileToProcess);
 
                             if ($result->isValid()) {
@@ -1523,13 +1537,10 @@ class Backend implements ControllerProviderInterface
 
         // Gather the 'similar' files, if present.. i.e., if we're editing config.yml, we also want to check for
         // config.yml.dist and config_local.yml
-        $basename = str_replace('.yml', '', str_replace('.dist', '', str_replace('_local', '', $filename)));
+        $basename = str_replace('.yml', '', str_replace('_local', '', $filename));
         $filegroup = array();
         if (is_readable($basename . '.yml')) {
             $filegroup[] = basename($basename . '.yml');
-        }
-        if (is_readable($basename . '.yml.dist')) {
-            $filegroup[] = basename($basename . '.yml.dist');
         }
         if (is_readable($basename . '_local.yml')) {
             $filegroup[] = basename($basename . '_local.yml');
@@ -1583,12 +1594,21 @@ class Backend implements ControllerProviderInterface
             }
         }
 
+        // For 'related' files we might need to keep track of the current dirname on top of the namespace. 
+        if (dirname($file) != '') {
+            $additionalpath = dirname($file) . '/';
+        } else {
+            $additionalpath = '';
+        }
+
         $context = array(
             'form' => $form->createView(),
             'filetype' => $type,
             'file' => $file,
             'basename' => basename($file),
             'pathsegments' => $pathsegments,
+            'additionalpath' => $additionalpath,
+            'namespace' => $namespace,
             'write_allowed' => $writeallowed,
             'filegroup' => $filegroup
         );
@@ -1613,7 +1633,7 @@ class Backend implements ControllerProviderInterface
             // copy from the locale_fallback version (en)
             if (!file_exists($filename) || filesize($filename) < 10) {
                 $srcfile = "app/resources/translations/en/$domain.en.$type";
-                $srcfilename = realpath(__DIR__ . '/../../../..') . '/'.$srcfile;
+                $srcfilename = realpath(__DIR__ . '/../../../..') . '/' . $srcfile;
                 $content = file_get_contents($srcfilename);
             } else {
                 $content = file_get_contents($filename);
